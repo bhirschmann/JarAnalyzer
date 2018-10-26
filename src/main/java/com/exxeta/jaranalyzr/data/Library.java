@@ -1,20 +1,33 @@
 package com.exxeta.jaranalyzr.data;
 
 import java.io.File;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.Comparator;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 public class Library {
 
 	String name;
 	String state;
 	String kind;
+	String parentName;
+	public String getParentName() {
+		return parentName;
+	}
+
+	public void setParentName(String parentName) {
+		this.parentName = parentName;
+	}
+
+	SortedSet<Library> libsList;
+
 	public String getState() {
 		return state;
 	}
 
-	public void setState(String state) {
+	public Library setState(String state) {
 		this.state = state;
+		return this;
 	}
 
 	public String getKind() {
@@ -26,11 +39,11 @@ public class Library {
 		return this;
 	}
 
-	public List<Library> getLibsList() {
+	public SortedSet<Library> getLibsList() {
 		return libsList;
 	}
 
-	public void setLibsList(List<Library> libsList) {
+	public void setLibsList(SortedSet<Library> libsList) {
 		this.libsList = libsList;
 	}
 
@@ -38,7 +51,6 @@ public class Library {
 		this.name = name;
 	}
 
-	List<Library> libsList;
 	
 	public Library(String name) {
 		
@@ -53,11 +65,14 @@ public class Library {
 			name = name.substring(lastSlash+1, name.length());
 		}
 		this.name = name;
+		
+		state = " ";
+		kind = " ";
 	}
 	
 	public Library addChild(String name) {
 		if (libsList == null) {
-			libsList = new LinkedList<Library>();
+			libsList = new TreeSet<Library>(Comparator.comparing(Library::getKind));
 		}
 		Library library = new Library(name);
 		libsList.add(library);
@@ -66,17 +81,41 @@ public class Library {
 	
 	public Library addChild(Library lib) {
 		if (libsList == null) {
-			libsList = new LinkedList<Library>();
+			libsList = new TreeSet<Library>(Comparator.comparing(Library::getKind));
 		}
 		libsList.add(lib);
 		return lib;
 	}
 	
-	public List<Library> getLibs() {
+	public SortedSet<Library> getLibs() {
 		return libsList;
 	}
 	
 	public String getName() {
 		return name;
 	}
+	
+	 @Override
+	  public boolean equals(Object o) {
+	    if (!(o instanceof Library)) {
+	      return false;
+	    }
+
+	    Library l = (Library) o;
+	    if (this.name == l.getName()) {
+	      return true;
+	    }
+
+	    return false;
+	  }
+
+	  @Override
+	  public int hashCode() {
+	    return this.name.hashCode();
+	  }
+
+	  @Override
+	  public String toString() {
+	    return "(" + name + ", " + kind + ", " + state +")";
+	  }	
 }

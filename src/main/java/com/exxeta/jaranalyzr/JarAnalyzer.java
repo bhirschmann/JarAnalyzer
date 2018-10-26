@@ -6,6 +6,8 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.StringWriter;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Date;
@@ -13,6 +15,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -25,6 +28,10 @@ public class JarAnalyzer {
 	final static String WAR_ARCHIVE = "war";
 	final static String EAR_ARCHIVE = "ear";
 	
+	final static String TH = "||";
+	final static String TD = "|";
+	final static String LF = "\n";
+
 	private int counterJar = 0;
 	private int counterWar = 0;
 	private int counterEar = 0;
@@ -49,12 +56,22 @@ public class JarAnalyzer {
 		rootLib = new Library(filename);
 		Library lib = analyzeArchive(filename, rootLib);
 		
+		// add the kind of the root archive
+		if (filename.endsWith(JAR_ARCHIVE)) {
+			lib.setKind(JAR_ARCHIVE);
+		} else if (filename.endsWith(WAR_ARCHIVE)) {
+			lib.setKind(WAR_ARCHIVE);
+		} else if (filename.endsWith(EAR_ARCHIVE)) {
+			lib.setKind(EAR_ARCHIVE);
+		} 
+		
 		Date endTime = new Date();
 		long timeElapsed = endTime.getTime() - startTime.getTime();
 		Date dateElapsed = new Date(timeElapsed);
 
 		presentResult(lib, dateElapsed);
-		writeJsonFile(lib, filename);
+//		writeJsonFile(lib, filename);
+		writeWikiMarkup(lib, filename);
 		cleanup();
 	}
 	
@@ -76,6 +93,7 @@ public class JarAnalyzer {
 					// extract war for further analysis
 					Path localFilename = extractFileFromArchive(arcFilename, fileName);
 					Library library = new Library(fileName);
+					library.setParentName(parentLib.getName());
 					
 					// analyze the extracted war and put its libs in the given library object
 					// (build the tree recursively)
@@ -106,12 +124,12 @@ public class JarAnalyzer {
 	}
 
 	private void addLib(String arcFilename, String kind, String fileName, Library parentLib) {
-		String state = null;
+		String state = " ";
 		if (this.checkForInternalArchives) {
 			state = checkArchiveState(arcFilename, fileName);
 			System.out.println(state);
 		}
-		parentLib.addChild(fileName).setKind(kind).setState(state);
+		parentLib.addChild(fileName).setKind(kind).setState(state).setParentName(parentLib.getName());
 		counterJar++;
 	}
 
@@ -121,7 +139,7 @@ public class JarAnalyzer {
 			state = checkArchiveState(arcFilename, lib.getName());
 			System.out.println(state);
 		}
-		parentLib.addChild(lib).setKind(kind).setState(state);
+		parentLib.addChild(lib).setKind(kind).setState(state).setParentName(parentLib.getName());
 		counterJar++;
 	}
 
@@ -288,6 +306,90 @@ public class JarAnalyzer {
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		}
+	}
+	
+	/** To handle the formatting for viewing the nested archives */
+	private int nestingLevel = 0;
+	private int maxNestingLevel = 0;
+	
+	private void writeWikiMarkup(Library lib, String filename) {
+
+		determineMaxNestingLevel(lib);
+		nestingLevel = 0;
+		
+		BufferedWriter writer= null;
+		try {
+			writer = new BufferedWriter(new FileWriter(filename + ".markup"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	    try {
+    	
+	    	// write table body
+	    	StringWriter writerBody = new StringWriter();
+	    	writeWikiMarkupOfNestedLibs(lib, writerBody);
+
+	    	// write table header
+	    	writer.write(TH + lib.getState() + TH + lib.getKind() + TH + lib.getName()  + TH );
+			for (int i=1; i<maxNestingLevel; i++) {
+				// add extra columns for the nested archives
+				writer.write(" " + TH);
+			}
+	    	writer.write(LF);
+	    	
+	    	// now append the body
+	    	writer.write(writerBody.getBuffer().toString());
+			writer.close();	
+			System.out.println("JSON file written to: " + filename + ".markup");
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	private void writeWikiMarkupOfNestedLibs(Library lib, Writer writer)
+			throws IOException {
+
+		nestingLevel++;
+		SortedSet<Library> libList = lib.getLibsList();
+		for (Iterator<Library> iterator = libList.iterator(); iterator.hasNext();) {
+			Library library = iterator.next();
+			writer.write(TD + library.getState() + TD + library.getKind());
+			for (int i=1; i<nestingLevel; i++) {
+				// indent the nested archived to the next column
+				writer.write( TD + " ");
+			}
+			writer.write( TD + library.getName() + TD);
+			for (int i=0; i<maxNestingLevel - nestingLevel; i++) {
+				// fill the space of empty cells to the last column
+				writer.write( " " + TD);
+			}
+			writer.write( LF );
+			
+			// check if nested libs exist
+			SortedSet<Library> libs = library.getLibs();
+			if (libs != null && !libs.isEmpty()) {
+				writeWikiMarkupOfNestedLibs(library, writer);
+				nestingLevel--;
+			}
+			
+		}
+	}
+
+	private void determineMaxNestingLevel(Library lib) {
+
+		nestingLevel++;
+		if (nestingLevel > maxNestingLevel) maxNestingLevel = nestingLevel;
+		
+		SortedSet<Library> libList = lib.getLibsList();
+		for (Iterator<Library> iterator = libList.iterator(); iterator.hasNext();) {
+			Library library = iterator.next();
+			// check if nested libs exist
+			SortedSet<Library> libs = library.getLibs();
+			if (libs != null && !libs.isEmpty()) {
+				determineMaxNestingLevel(library);
+				nestingLevel--;
+			}
 		}
 	}
 
