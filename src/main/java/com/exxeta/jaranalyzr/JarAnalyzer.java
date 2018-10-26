@@ -10,9 +10,13 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.cert.CollectionCertStoreParameters;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
@@ -44,12 +48,13 @@ public class JarAnalyzer {
 
 	final static Map<String,Path> TEMP_FILES = new HashMap<String,Path>();
 	
-	
-	public JarAnalyzer(String filename, String internalToken) {
+	public JarAnalyzer(String filename, String internalToken, boolean exportJson, boolean exportWikiMarkup) {
 		
 		this.internalToken = internalToken;
+		
 		if (internalToken!=null && internalToken.length()>0) {
 			this.checkForInternalArchives = true;
+			System.out.println("Checking for internal archives using '"+internalToken+"'");
 		}
 		Date startTime = new Date();
 		
@@ -70,8 +75,13 @@ public class JarAnalyzer {
 		Date dateElapsed = new Date(timeElapsed);
 
 		presentResult(lib, dateElapsed);
-//		writeJsonFile(lib, filename);
-		writeWikiMarkup(lib, filename);
+		
+		if (exportJson) {
+			writeJsonFile(lib, filename);
+		}
+		if (exportWikiMarkup) {
+			writeWikiMarkup(lib, filename);
+		}
 		cleanup();
 	}
 	
@@ -94,6 +104,7 @@ public class JarAnalyzer {
 					Path localFilename = extractFileFromArchive(arcFilename, fileName);
 					Library library = new Library(fileName);
 					library.setParentName(parentLib.getName());
+					library.setKind(WAR_ARCHIVE);
 					
 					// analyze the extracted war and put its libs in the given library object
 					// (build the tree recursively)
@@ -122,24 +133,32 @@ public class JarAnalyzer {
 		}
         return parentLib;
 	}
+	
+	/** 
+	 * Get the version of the achive, 
+	 * either from the embedded MANIFEST.MF or from the filename.
+	 * @param lib
+	 * @return Version string
+	 */
+	private String getArchiveVersion(Library lib) {
+		// "Implementation-Version"
+		// Implementation-Version: 01.02.59-CS.0-7618
+		return null;
+	}
 
 	private void addLib(String arcFilename, String kind, String fileName, Library parentLib) {
-		String state = " ";
-		if (this.checkForInternalArchives) {
-			state = checkArchiveState(arcFilename, fileName);
-			System.out.println(state);
-		}
-		parentLib.addChild(fileName).setKind(kind).setState(state).setParentName(parentLib.getName());
-		counterJar++;
+		Library lib = new Library(fileName);
+		addLib(arcFilename, kind, lib, parentLib);
 	}
 
 	private void addLib(String arcFilename, String kind, Library lib, Library parentLib) {
-		String state = null;
+		String state = "";
 		if (this.checkForInternalArchives) {
 			state = checkArchiveState(arcFilename, lib.getName());
 			System.out.println(state);
 		}
-		parentLib.addChild(lib).setKind(kind).setState(state).setParentName(parentLib.getName());
+		lib.setKind(kind).setState(state).setParentName(parentLib.getName());
+		parentLib.addChild(lib);
 		counterJar++;
 	}
 
@@ -166,18 +185,18 @@ public class JarAnalyzer {
         ZipEntry zipEntry;
 		try {
 			zipEntry = zis.getNextEntry();
-			System.out.print(".");
+			System.out.print("...");
 			while (zipEntry != null) {
 				String fileName = zipEntry.getName();
 				
 				// is this the file in the archive to check?
-				if (fileName.equals(nameOfFileToExtract)) {
+				if (fileName!=null && fileName.endsWith(nameOfFileToExtract)) {
 					zis2 = new ZipInputStream(zis);
 					ZipEntry zipEntry2;
 					zipEntry2 = zis2.getNextEntry();
 					while (zipEntry2 != null) {
 						String fileName2 = zipEntry2.getName();
-						if (fileName2.contains("creditreform")) {
+						if (fileName2.contains(internalToken)) {
 							state = "internal";
 							return state;
 						}
@@ -185,7 +204,6 @@ public class JarAnalyzer {
 					}
 				}
 				zipEntry = zis.getNextEntry();
-				System.out.print(".");
 			}
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
@@ -193,11 +211,11 @@ public class JarAnalyzer {
 		}
 		finally {
 			try {
-				zis2.closeEntry();
-				zis2.close();
 				zis.closeEntry();
 				zis.close();
-			} catch (IOException e) {
+				zis2.closeEntry();
+				zis2.close();
+			} catch (Exception e) {
 				// noop
 			}
 		}
@@ -269,6 +287,11 @@ public class JarAnalyzer {
 		}		
 	}
 
+	/**
+	 * Print the summary of the result to the console
+	 * @param library
+	 * @param timeElapsed
+	 */
 	private void presentResult(Library library, Date timeElapsed) {
 
 //        for (Iterator<Library> iterator = library.getLibs().iterator(); iterator.hasNext();) {
@@ -288,6 +311,11 @@ public class JarAnalyzer {
 		System.out.println(library.getName());
 	}
 	
+	/**
+	 * Export the result in a structure to a Json file
+	 * @param library
+	 * @param filename
+	 */
 	private void writeJsonFile(Library library, String filename) {
 		Gson gson = new Gson();
 		String json = gson.toJson(library);
@@ -313,6 +341,12 @@ public class JarAnalyzer {
 	private int nestingLevel = 0;
 	private int maxNestingLevel = 0;
 	
+	/**
+	 * Export the result in a table in Wiki markup format, 
+	 * for easy import in a Wiki like Confluence.
+	 * @param lib
+	 * @param filename
+	 */
 	private void writeWikiMarkup(Library lib, String filename) {
 
 		determineMaxNestingLevel(lib);
@@ -341,7 +375,7 @@ public class JarAnalyzer {
 	    	// now append the body
 	    	writer.write(writerBody.getBuffer().toString());
 			writer.close();	
-			System.out.println("JSON file written to: " + filename + ".markup");
+			System.out.println("markup file written to: " + filename + ".markup");
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -415,21 +449,36 @@ public class JarAnalyzer {
 		
 		String internalToken = null;
 		if (args.length < 1) {
-			System.err.println("Error: please provide the required parameters:");
+			System.err.println("Please provide the required parameters");
 			System.err.println("1. parameter: <Java archive to analyze>");
-			System.err.println("optional 2. parameter: -i <search token> (The search token to search for in nested archives, indication it is an internal archive, i.e. a Java package which name indicates its internal existence )");
+			System.err.println("additional optional parameters: ");
+			System.err.println("-i <search token> (The search token to search for in nested archives, indication it is an internal archive, i.e. a Java package which name indicates its internal existence )");
+			System.err.println("-j (Export result as tree in a Json file)");
+			System.err.println("-m (Export result as table in a Wiki markup file, for easy import in a Wiki)");
 			System.err.println();
 			System.err.println("Example arguments: /users/bob/application.ear -i mycompany");
 			System.exit(0);
 		}
+		
+		boolean exportJson = false;
+		boolean exportWikiMarkup = false;
+		
 		if (args.length > 1) {
-			String option = args[1];
-			if ("-i".equals(option)) {
-				if (args.length > 2) {
-					internalToken = args[2];
+			List<String> argsList = Arrays.asList(args);
+			Iterator<String> iterator = argsList.iterator();
+			while (iterator.hasNext()) {
+				String arg = iterator.next();
+				if ("-i".equals(arg) && iterator.hasNext()) {
+					internalToken = iterator.next();
+				}
+				else if ("-j".equals(arg)) {
+					exportJson = true;
+				}
+				else if ("-m".equals(arg)) {
+					exportWikiMarkup = true;
 				}
 			}
 		}
-		new JarAnalyzer(args[0], internalToken);
+		new JarAnalyzer(args[0], internalToken, exportJson, exportWikiMarkup);
 	}
 }

@@ -11,6 +11,11 @@ public class Library {
 	String state;
 	String kind;
 	String parentName;
+
+	Comparator<Library> comparator = Comparator.comparing(Library::getState).reversed().thenComparing(Library::getKind).thenComparing(Library::getName);
+
+	SortedSet<Library> libsList = new TreeSet<Library>(comparator);
+	
 	public String getParentName() {
 		return parentName;
 	}
@@ -19,7 +24,6 @@ public class Library {
 		this.parentName = parentName;
 	}
 
-	SortedSet<Library> libsList;
 
 	public String getState() {
 		return state;
@@ -69,20 +73,18 @@ public class Library {
 		state = " ";
 		kind = " ";
 	}
-	
-	public Library addChild(String name) {
-		if (libsList == null) {
-			libsList = new TreeSet<Library>(Comparator.comparing(Library::getKind));
-		}
-		Library library = new Library(name);
-		libsList.add(library);
-		return library;
-	}
+//	
+//	public Library addChild(String name) {
+//		if (libsList == null) {
+//			
+//			libsList = new TreeSet<Library>(comparator);
+//		}
+//		Library library = new Library(name);
+//		libsList.add(library);
+//		return library;
+//	}
 	
 	public Library addChild(Library lib) {
-		if (libsList == null) {
-			libsList = new TreeSet<Library>(Comparator.comparing(Library::getKind));
-		}
 		libsList.add(lib);
 		return lib;
 	}
