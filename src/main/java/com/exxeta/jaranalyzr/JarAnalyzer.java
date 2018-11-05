@@ -10,9 +10,7 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.cert.CollectionCertStoreParameters;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -250,7 +248,15 @@ public class JarAnalyzer {
 				if (fileName.equals(nameOfFileToExtract)) {
 					
 					// extract the file
-					tempFile = Files.createTempFile(tempDirectory, null, fileName);
+					String tempFileName = fileName.replaceAll("/", "_");
+					System.out.println("Creating temp file: " + tempFileName);
+					try {
+						tempFile = Files.createTempFile(tempDirectory, null, tempFileName);
+					} 
+					catch (IllegalArgumentException iae) {
+						System.err.println("Error creating temp file: " + tempFileName);
+						System.err.println(iae.getMessage());
+					}
 					FileOutputStream fos = new FileOutputStream(tempFile.toFile());
 					int len;
 					while ((len = zis.read(buffer)) > 0) {
