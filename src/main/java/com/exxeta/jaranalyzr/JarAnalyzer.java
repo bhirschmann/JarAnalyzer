@@ -462,7 +462,7 @@ public class JarAnalyzer {
 			System.err.println("-j (Export result as tree in a Json file)");
 			System.err.println("-m (Export result as table in a Wiki markup file, for easy import in a Wiki)");
 			System.err.println();
-			System.err.println("Example arguments: /users/bob/application.ear -i mycompany");
+			System.err.println("Example arguments: /users/bob/application.ear -i mycompany -j -m");
 			System.exit(0);
 		}
 		
